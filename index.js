@@ -1,8 +1,11 @@
+require('dotenv').config()
 const express = require('express')
 const app = express()
 const bodyParser = require('body-parser')
 const morgan = require('morgan')
 const cors = require('cors')
+const mongoose = require('mongoose')
+
 app.use(express.static('build'))
 app.use(cors())
 app.use(bodyParser.json())
@@ -13,6 +16,22 @@ app.use(
   )
 )
 
+const url = process.env.MONGODB_URI
+
+mongoose
+  .connect(
+    url,
+    { useNewUrlParser: true }
+  )
+  .then(result => console.log())
+
+const personSchema = new mongoose.Schema({
+  name: String,
+  number: String
+})
+
+const Person = mongoose.model('person', personSchema)
+
 let persons = [
   { id: 1, name: 'Arto Hellas', number: '040-123456' },
   { id: 2, name: 'Martti Tienari', number: '040-123456' },
@@ -22,7 +41,9 @@ let persons = [
 
 app.get('/api/persons', (req, res) => {
   console.log(persons)
-  res.json(persons)
+  Person.find({}).then(persons => {
+    res.json(persons)
+  })
 })
 
 app.get('/api/persons/:id', (req, res) => {
@@ -37,7 +58,7 @@ app.get('/api/persons/:id', (req, res) => {
   }
 })
 
-app.get('/info', (req, res) => {
+app.get('/api/info', (req, res) => {
   res.send(`<div>Puhelinluettelossa ${persons.length} henkilön tiedont</div>
   <div>${new Date()}</div>`)
 })
@@ -71,7 +92,7 @@ app.post('/api/persons', (req, res) => {
   res.json(persons)
 })
 
-const port = process.env.PORT || 3001
+const port = process.env.PORT
 app.listen(port, () => {
   console.log(`server running on port ${port}`)
 })
