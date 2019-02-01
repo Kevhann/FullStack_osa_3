@@ -1,10 +1,13 @@
-require('dotenv').config()
+if (process.env.NODE_ENV !== 'production') {
+  require('dotenv').config()
+}
 const express = require('express')
 const app = express()
 const bodyParser = require('body-parser')
 const morgan = require('morgan')
 const cors = require('cors')
-const mongoose = require('mongoose')
+const Person = require('./models/person')
+const errorHandler = require('./errorHandler')
 
 app.use(express.static('build'))
 app.use(cors())
@@ -16,83 +19,67 @@ app.use(
   )
 )
 
-const url = process.env.MONGODB_URI
-
-mongoose
-  .connect(
-    url,
-    { useNewUrlParser: true }
-  )
-  .then(result => console.log())
-
-const personSchema = new mongoose.Schema({
-  name: String,
-  number: String
-})
-
-const Person = mongoose.model('person', personSchema)
-
-let persons = [
-  { id: 1, name: 'Arto Hellas', number: '040-123456' },
-  { id: 2, name: 'Martti Tienari', number: '040-123456' },
-  { id: 3, name: 'Arto Järvinen', number: '040-123456' },
-  { id: 4, name: 'Lea Kutvonen', number: '040-123456' }
-]
-
-app.get('/api/persons', (req, res) => {
-  console.log(persons)
+app.get('/info', (req, res) => {
   Person.find({}).then(persons => {
-    res.json(persons)
+    res.send(
+      `<div>Puhelinluettelossa on ${
+        persons.length
+      } henkilöä</div><div>${new Date()}</div>`
+    )
   })
 })
 
-app.get('/api/persons/:id', (req, res) => {
-  const id = Number(req.params.id)
-  console.log(id)
-  const person = persons.find(p => p.id === id)
-  console.log(person)
-  if (person) {
-    res.json(person)
-  } else {
-    res.status(404).end()
-  }
+app.get('/api/persons', (req, res) => {
+  Person.find({}).then(persons => {
+    res.json(persons.map(p => p.toJSON()))
+  })
 })
 
-app.get('/api/info', (req, res) => {
-  res.send(`<div>Puhelinluettelossa ${persons.length} henkilön tiedont</div>
-  <div>${new Date()}</div>`)
+app.get('/api/persons/:id', (req, res, next) => {
+  Person.findById(req.params.id)
+    .then(person => {
+      console.log(person)
+      if (person) {
+        res.json(person.toJSON())
+      } else {
+        res.status(404).end()
+      }
+    })
+    .catch(error => next(error))
 })
 
-app.delete('/api/persons/:id', (req, res) => {
-  const id = Number(req.params.id)
-  persons = persons.filter(p => p.id !== id)
-  res.status(204).end()
+app.put('/api/persons/:id', (req, res, next) => {
+  Person.findByIdAndUpdate(req.params.id, req.body, { new: true })
+    .then(p => {
+      res.json(p.toJSON())
+    })
+    .catch(error => next(error))
 })
 
-app.post('/api/persons', (req, res) => {
-  const body = req.body
-  if (!body.name || !body.number) {
-    console.log('bad request')
-    return res
-      .status(400)
-      .json({ error: 'person must include name and number' })
-  }
+app.delete('/api/persons/:id', (req, res, next) => {
+  Person.findByIdAndDelete(req.params.id)
+    .then(result => {
+      res.status(204).end()
+    })
+    .catch(error => next(error))
+})
 
-  if (persons.map(p => p.name).includes(body.name)) {
-    console.log('ei ollu')
-    return res.status(400).json({ error: 'name must be unique' })
-  }
+app.post('/api/persons', (req, res, next) => {
+  const person = new Person({
+    name: req.body.name,
+    number: req.body.number
+  })
 
-  const newPerson = {
-    id: Math.floor(Math.random() * 2147000000),
-    name: body.name,
-    number: body.number
-  }
-  persons = persons.concat(newPerson)
-  res.json(persons)
+  person
+    .save()
+    .then(p => {
+      res.json(p.toJSON())
+    })
+    .catch(error => next(error))
 })
 
 const port = process.env.PORT
 app.listen(port, () => {
   console.log(`server running on port ${port}`)
 })
+app.use(errorHandler)
